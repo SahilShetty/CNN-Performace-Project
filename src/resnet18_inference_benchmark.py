@@ -1,6 +1,5 @@
-import torch
 from torchvision.models import resnet18
-from inference_benchmark import single_batch_inference_benchmark, varying_batch_inference_benchmark
+from inference_benchmark import varying_batch_inference_benchmark
 
 model = resnet18(weights=None)
 

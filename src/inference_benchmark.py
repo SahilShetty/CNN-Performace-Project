@@ -3,36 +3,54 @@ import time
 import torch
 from torch import nn
 
+import statistics
 import matplotlib.pyplot as plt
+
+from dataclasses import dataclass
+
+@dataclass
+class InferenceBenchmarkResult:
+    batch_size: int
+    warmup_iterations: int
+    iterations: int
+    latencies_ms: list[float]
+    mean_latency_ms: float
+    median_latency_ms: float
+    stdev_latency_ms: float
+    throughput_images_per_sec: float
 
 def single_batch_inference_benchmark(
         model: nn.Module,
-        input: torch.Tensor,
+        inputs: torch.Tensor,
         warmup_iterations: int = 10,
         iterations: int = 50
-) -> tuple[float, float]:
+) -> InferenceBenchmarkResult:
     model.eval()
 
     with torch.inference_mode():
         # Warmup iterations
         for _ in range(warmup_iterations):
-            model(input)
+            model(inputs)
 
-        start = time.perf_counter()
-
+        latencies_ms = []
         # Benchmarking iterations
         for _ in range(iterations):
-            model(input)
+            start = time.perf_counter()
+            model(inputs)
+            end = time.perf_counter()
 
-    end = time.perf_counter()
+            latencies_ms.append((end - start) * 1000)
 
-    time_taken =  end - start
-    avg_latency_ms = time_taken / iterations * 1000
+    mean_latency_ms = statistics.mean(latencies_ms)
+    median_latency_ms = statistics.median(latencies_ms)
+    stdev_latency_ms = statistics.stdev(latencies_ms)
 
-    batch_size = input.shape[0]
-    avg_images_per_sec = batch_size * iterations / time_taken
+    batch_size = inputs.shape[0]
+    throughput_images_per_sec = batch_size / mean_latency_ms * 1000
 
-    return avg_latency_ms, avg_images_per_sec
+    return InferenceBenchmarkResult(batch_size, warmup_iterations, iterations,
+                                    latencies_ms, mean_latency_ms, median_latency_ms,
+                                    stdev_latency_ms, throughput_images_per_sec)
 
 
 def varying_batch_inference_benchmark(
@@ -47,12 +65,12 @@ def varying_batch_inference_benchmark(
 
 
     for batch_size in batch_sizes:
-        input = torch.rand(batch_size, 3, 256, 256)
-        avg_latency_ms, avg_images_per_sec = single_batch_inference_benchmark(model, input, warmup_iterations, iterations)
-        diff_latency_ms.append(avg_latency_ms)
-        diff_images_per_sec.append(avg_images_per_sec)
+        inputs = torch.rand(batch_size, 3, 224, 224)
+        result = single_batch_inference_benchmark(model, inputs, warmup_iterations, iterations)
+        diff_latency_ms.append(result.mean_latency_ms)
+        diff_images_per_sec.append(result.throughput_images_per_sec)
 
-        print("Finished batch ", batch_size)
+        print("Finished batch size", batch_size)
 
     plt.figure()
     plt.plot(batch_sizes, diff_latency_ms, color="red")
@@ -65,6 +83,7 @@ def varying_batch_inference_benchmark(
     plt.ylabel("Images per second")
 
     plt.show()
+
 
     
 
