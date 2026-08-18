@@ -9,6 +9,13 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass
 
 @dataclass
+class InferenceBenchmarkConfig:
+    model: nn.Module
+    inputs: torch.Tensor
+    warmup_iterations: int = 10
+    iterations: int = 50
+
+@dataclass
 class InferenceBenchmarkResult:
     batch_size: int
     warmup_iterations: int
@@ -57,35 +64,42 @@ def varying_batch_inference_benchmark(
         model: nn.Module,
         warmup_iterations: int = 10,
         iterations: int = 50,
-        diff_batch_sizes: int = 3):
+        num_batch_sizes: int = 3) -> list[InferenceBenchmarkResult]:
 
-    batch_sizes = [2 ** i for i in range(diff_batch_sizes)]
-    diff_latency_ms = []
-    diff_images_per_sec = []
-
+    batch_sizes = [2 ** i for i in range(num_batch_sizes)]
+    results = []
 
     for batch_size in batch_sizes:
         inputs = torch.rand(batch_size, 3, 224, 224)
         result = single_batch_inference_benchmark(model, inputs, warmup_iterations, iterations)
-        diff_latency_ms.append(result.mean_latency_ms)
-        diff_images_per_sec.append(result.throughput_images_per_sec)
+        results.append(result)
 
         print("Finished batch size", batch_size)
 
+    return results
+
+
+def plot_latency_images(results: list[InferenceBenchmarkResult]):
+
+    difrnt_batch_sizes = []
+    difrnt_mean_latencies_ms = []
+    difrnt_images_per_sec = []
+    for result in results:
+        difrnt_batch_sizes.append(result.batch_size)
+        difrnt_mean_latencies_ms.append(result.mean_latency_ms)
+        difrnt_images_per_sec.append(result.throughput_images_per_sec)
+
     plt.figure()
-    plt.plot(batch_sizes, diff_latency_ms, color="red")
+    plt.plot(difrnt_batch_sizes, difrnt_mean_latencies_ms, color="red", marker='o')
     plt.xlabel("Batch Size")
     plt.ylabel("Latency (ms)")
 
     plt.figure()
-    plt.plot(batch_sizes, diff_images_per_sec, color="blue")
+    plt.plot(difrnt_batch_sizes, difrnt_images_per_sec, color="blue", marker='o')
     plt.xlabel("Batch Size")
     plt.ylabel("Images per second")
 
     plt.show()
-
-
-    
 
 
     
