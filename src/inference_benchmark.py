@@ -11,9 +11,10 @@ from dataclasses import dataclass
 @dataclass
 class InferenceBenchmarkConfig:
     model: nn.Module
-    inputs: torch.Tensor
+    inputs: torch.Tensor = None
     warmup_iterations: int = 10
     iterations: int = 50
+    num_batch_sizes: int = 5
 
 @dataclass
 class InferenceBenchmarkResult:
@@ -26,24 +27,19 @@ class InferenceBenchmarkResult:
     stdev_latency_ms: float
     throughput_images_per_sec: float
 
-def single_batch_inference_benchmark(
-        model: nn.Module,
-        inputs: torch.Tensor,
-        warmup_iterations: int = 10,
-        iterations: int = 50
-) -> InferenceBenchmarkResult:
-    model.eval()
+def single_batch_inference_benchmark(config: InferenceBenchmarkConfig) -> InferenceBenchmarkResult:
+    config.model.eval()
 
     with torch.inference_mode():
         # Warmup iterations
-        for _ in range(warmup_iterations):
-            model(inputs)
+        for _ in range(config.warmup_iterations):
+            config.model(config.inputs)
 
         latencies_ms = []
         # Benchmarking iterations
-        for _ in range(iterations):
+        for _ in range(config.iterations):
             start = time.perf_counter()
-            model(inputs)
+            config.model(config.inputs)
             end = time.perf_counter()
 
             latencies_ms.append((end - start) * 1000)
@@ -52,29 +48,26 @@ def single_batch_inference_benchmark(
     median_latency_ms = statistics.median(latencies_ms)
     stdev_latency_ms = statistics.stdev(latencies_ms)
 
-    batch_size = inputs.shape[0]
+    batch_size = config.inputs.shape[0]
     throughput_images_per_sec = batch_size / mean_latency_ms * 1000
 
-    return InferenceBenchmarkResult(batch_size, warmup_iterations, iterations,
+    return InferenceBenchmarkResult(batch_size, config.warmup_iterations, config.iterations,
                                     latencies_ms, mean_latency_ms, median_latency_ms,
                                     stdev_latency_ms, throughput_images_per_sec)
 
 
-def varying_batch_inference_benchmark(
-        model: nn.Module,
-        warmup_iterations: int = 10,
-        iterations: int = 50,
-        num_batch_sizes: int = 3) -> list[InferenceBenchmarkResult]:
+def varying_batch_inference_benchmark(config: InferenceBenchmarkConfig) -> list[InferenceBenchmarkResult]:
 
-    batch_sizes = [2 ** i for i in range(num_batch_sizes)]
+    batch_sizes = [2 ** i for i in range(config.num_batch_sizes)]
     results = []
 
     for batch_size in batch_sizes:
         inputs = torch.rand(batch_size, 3, 224, 224)
-        result = single_batch_inference_benchmark(model, inputs, warmup_iterations, iterations)
+        config.inputs = inputs
+        result = single_batch_inference_benchmark(config)
         results.append(result)
 
-        print("Finished batch size", batch_size)
+        print("Finished batch size", batch_size, ": " + str(result.throughput_images_per_sec), "images per second")
 
     return results
 
@@ -89,10 +82,12 @@ def plot_latency_images(results: list[InferenceBenchmarkResult]):
         difrnt_mean_latencies_ms.append(result.mean_latency_ms)
         difrnt_images_per_sec.append(result.throughput_images_per_sec)
 
+    '''
     plt.figure()
     plt.plot(difrnt_batch_sizes, difrnt_mean_latencies_ms, color="red", marker='o')
     plt.xlabel("Batch Size")
     plt.ylabel("Latency (ms)")
+    '''
 
     plt.figure()
     plt.plot(difrnt_batch_sizes, difrnt_images_per_sec, color="blue", marker='o')
