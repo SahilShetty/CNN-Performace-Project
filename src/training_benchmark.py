@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 import torch
 from torch import nn
 
@@ -13,7 +15,23 @@ class TrainingBenchmarkConfig:
     loss_fn: torch.nn.Module
     optimizer: torch.optim.Optimizer
     warmup_iterations: int = 10
-    iterations: int = 25
+    iterations: int = 100
+
+BatchIterator = Iterator[tuple[torch.Tensor, torch.Tensor]]
+
+# helper function for dataloader
+def next_batch(
+        dataloader: torch.utils.data.DataLoader,
+        iter_dataloader: BatchIterator
+        ) -> tuple[torch.Tensor, torch.Tensor, BatchIterator]:
+    try:
+        (X, y) = next(iter_dataloader)
+    except StopIteration:
+        iter_dataloader = iter(dataloader)
+        (X, y) = next(iter_dataloader)
+
+    return (X, y, iter_dataloader)
+
 
 # using iterations and not epochs because benchmarking computation, not model accuracy, is the main goal
 # if len(dataloader) == 5000 and we increase epochs by 3,
@@ -23,6 +41,8 @@ def training_loop(config: TrainingBenchmarkConfig):
     total_training_times = []
     dataloader_times = []
     forward_times = []
+    loss_times = []
+    zero_grad_times = []
     backward_times = []
     optimizer_times = []
 
@@ -30,11 +50,7 @@ def training_loop(config: TrainingBenchmarkConfig):
 
     iter_warmup_dataloader = iter(config.dataloader)
     for warmup_iteration in range(config.warmup_iterations):
-        try:
-            (X, y) = next(iter_warmup_dataloader)
-        except StopIteration:
-            iter_warmup_dataloader = iter(config.dataloader)
-            (X, y) = next(iter_warmup_dataloader)
+        (X, y, iter_warmup_dataloader) = next_batch(config.dataloader, iter_warmup_dataloader)
 
         y_pred = config.model(X)
         loss = config.loss_fn(y_pred, y)
@@ -47,39 +63,42 @@ def training_loop(config: TrainingBenchmarkConfig):
     iter_dataloader = iter(config.dataloader)
     for iteration in range(config.iterations):
         dataloader_time_start = perf_counter()
-        try:
-            (X, y) = next(iter_dataloader)
-        except StopIteration:
-            iter_dataloader = iter(config.dataloader)
-            (X, y) = next(iter_dataloader)
-
+        (X, y, iter_dataloader) = next_batch(config.dataloader, iter_dataloader)
         dataloader_time_end = perf_counter()
-        dataloader_times.append(dataloader_time_end - dataloader_time_start)
 
         total_training_time_start = perf_counter()
 
         forward_time_start = perf_counter()
         y_pred = config.model(X)
         forward_time_end = perf_counter()
-        forward_times.append(forward_time_end - forward_time_start)
 
+        loss_time_start = perf_counter()
         loss = config.loss_fn(y_pred, y)
         train_loss += loss.item()
+        loss_time_end = perf_counter()
 
+        zero_grad_time_start = perf_counter()
         config.optimizer.zero_grad()
+        zero_grad_time_end = perf_counter()
 
         backward_time_start = perf_counter()
         loss.backward()
         backward_time_end = perf_counter()
-        backward_times.append(backward_time_end - backward_time_start)
 
         optimizer_time_start = perf_counter()
         config.optimizer.step()
         optimizer_time_end = perf_counter()
-        optimizer_times.append(optimizer_time_end - optimizer_time_start)
 
         total_training_time_end = perf_counter()
+
         total_training_times.append(total_training_time_end - total_training_time_start)
+        dataloader_times.append(dataloader_time_end - dataloader_time_start)
+        forward_times.append(forward_time_end - forward_time_start)
+        loss_times.append(loss_time_end - loss_time_start)
+        zero_grad_times.append(zero_grad_time_end - zero_grad_time_start)
+        backward_times.append(backward_time_end - backward_time_start)
+        optimizer_times.append(optimizer_time_end - optimizer_time_start)
+
 
         if iteration % 100 == 0:
             print("Done with iteration", iteration)
