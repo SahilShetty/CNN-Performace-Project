@@ -1,8 +1,7 @@
-import time
-
 import torch
 from torch import nn
 
+import time
 import statistics
 import matplotlib.pyplot as plt
 
