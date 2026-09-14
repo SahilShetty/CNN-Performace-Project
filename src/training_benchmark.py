@@ -17,6 +17,16 @@ class TrainingBenchmarkConfig:
     warmup_iterations: int = 10
     iterations: int = 100
 
+@dataclass
+class TrainingBenchmarkTimingResults:
+    total_training_times: list[float]
+    dataloader_times: list[float]
+    forward_times: list[float]
+    loss_times: list[float]
+    zero_grad_times: list[float]
+    backward_times: list[float]
+    optimizer_times: list[float]
+
 BatchIterator = Iterator[tuple[torch.Tensor, torch.Tensor]]
 
 # helper function for dataloader
@@ -37,7 +47,7 @@ def next_batch(
 # if len(dataloader) == 5000 and we increase epochs by 3,
 # that means 15000 - 5000 == 10000 more benchmark iterations
 # we want to increase iterations by 1 and have the number of benchmark iterations increase by 1
-def training_loop(config: TrainingBenchmarkConfig):
+def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkTimingResults:
     total_training_times = []
     dataloader_times = []
     forward_times = []
@@ -58,7 +68,7 @@ def training_loop(config: TrainingBenchmarkConfig):
         loss.backward()
         config.optimizer.step()
 
-    train_loss = 0
+    # train_loss = 0
 
     iter_dataloader = iter(config.dataloader)
     for iteration in range(config.iterations):
@@ -74,7 +84,7 @@ def training_loop(config: TrainingBenchmarkConfig):
 
         loss_time_start = perf_counter()
         loss = config.loss_fn(y_pred, y)
-        train_loss += loss.item()
+        # train_loss += loss.item()
         loss_time_end = perf_counter()
 
         zero_grad_time_start = perf_counter()
@@ -102,3 +112,29 @@ def training_loop(config: TrainingBenchmarkConfig):
 
         if iteration % 100 == 0:
             print("Done with iteration", iteration)
+
+    return TrainingBenchmarkTimingResults(
+        total_training_times,
+        dataloader_times,
+        forward_times,
+        loss_times,
+        zero_grad_times,
+        backward_times,
+        optimizer_times)
+
+def processing_times(timing_results: TrainingBenchmarkTimingResults):
+    overhead_times = []
+
+    for i in range(len(timing_results.total_training_times)):
+        overhead_time = (timing_results.total_training_times[i] -
+                         timing_results.forward_times[i] -
+                         timing_results.loss_times[i] -
+                         timing_results.zero_grad_times[i] -
+                         timing_results.backward_times[i] -
+                         timing_results.optimizer_times[i])
+        overhead_times.append(overhead_time)
+
+    return overhead_times
+
+
+    
