@@ -6,7 +6,7 @@ from torch import nn
 from time import perf_counter
 import statistics
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class TrainingBenchmarkConfig:
@@ -27,6 +27,8 @@ class TrainingBenchmarkTimingResults:
     backward_times: list[float]
     optimizer_times: list[float]
 
+    overhead_times: list[float] = field(default_factory=list)
+
 BatchIterator = Iterator[tuple[torch.Tensor, torch.Tensor]]
 
 # helper function for dataloader
@@ -42,6 +44,19 @@ def next_batch(
 
     return (X, y, iter_dataloader)
 
+def processing_overhead_times(timing_results: TrainingBenchmarkTimingResults) -> None:
+    overhead_times = []
+
+    for i in range(len(timing_results.total_training_times)):
+        overhead_time = (timing_results.total_training_times[i] -
+                         timing_results.forward_times[i] -
+                         timing_results.loss_times[i] -
+                         timing_results.zero_grad_times[i] -
+                         timing_results.backward_times[i] -
+                         timing_results.optimizer_times[i])
+        overhead_times.append(overhead_time)
+
+    timing_results.overhead_times = overhead_times
 
 # using iterations and not epochs because benchmarking computation, not model accuracy, is the main goal
 # if len(dataloader) == 5000 and we increase epochs by 3,
@@ -113,7 +128,7 @@ def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkTimingRes
         if iteration % 100 == 0:
             print("Done with iteration", iteration)
 
-    return TrainingBenchmarkTimingResults(
+    timing_results = TrainingBenchmarkTimingResults(
         total_training_times,
         dataloader_times,
         forward_times,
@@ -121,20 +136,7 @@ def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkTimingRes
         zero_grad_times,
         backward_times,
         optimizer_times)
-
-def processing_times(timing_results: TrainingBenchmarkTimingResults):
-    overhead_times = []
-
-    for i in range(len(timing_results.total_training_times)):
-        overhead_time = (timing_results.total_training_times[i] -
-                         timing_results.forward_times[i] -
-                         timing_results.loss_times[i] -
-                         timing_results.zero_grad_times[i] -
-                         timing_results.backward_times[i] -
-                         timing_results.optimizer_times[i])
-        overhead_times.append(overhead_time)
-
-    return overhead_times
-
-
     
+    processing_overhead_times(timing_results)
+
+    return timing_results
