@@ -17,17 +17,31 @@ class TrainingBenchmarkConfig:
     warmup_iterations: int = 10
     iterations: int = 100
 
-@dataclass
-class TrainingBenchmarkTimingResults:
-    total_training_times: list[float]
-    dataloader_times: list[float]
-    forward_times: list[float]
-    loss_times: list[float]
-    zero_grad_times: list[float]
-    backward_times: list[float]
-    optimizer_times: list[float]
+    def __post_init__(self):
+        if self.iterations < 2:
+            raise ValueError("Number of iterations must be greater than 1")
+        if self.warmup_iterations < 0:
+            raise ValueError("Iterations must be greater than 0")
 
-    overhead_times: list[float] = field(default_factory=list)
+
+@dataclass
+class TimingStatistics:
+    timings_ms: list[float]
+    mean_ms: float
+    median_ms: float
+    stdev_ms: float
+
+@dataclass
+class TrainingBenchmarkResults:
+    total_training_times: TimingStatistics
+    dataloader_times: TimingStatistics
+    forward_times: TimingStatistics
+    loss_times: TimingStatistics
+    zero_grad_times: TimingStatistics
+    backward_times: TimingStatistics
+    optimizer_times: TimingStatistics
+
+    overhead_times: TimingStatistics
 
 BatchIterator = Iterator[tuple[torch.Tensor, torch.Tensor]]
 
@@ -44,25 +58,22 @@ def next_batch(
 
     return (X, y, iter_dataloader)
 
-def processing_overhead_times(timing_results: TrainingBenchmarkTimingResults) -> None:
-    overhead_times = []
+# helper function for processing timings
+def timings_processing(timings: list[float]) -> TimingStatistics:
+    timings = [1000 * i for i in timings]
 
-    for i in range(len(timing_results.total_training_times)):
-        overhead_time = (timing_results.total_training_times[i] -
-                         timing_results.forward_times[i] -
-                         timing_results.loss_times[i] -
-                         timing_results.zero_grad_times[i] -
-                         timing_results.backward_times[i] -
-                         timing_results.optimizer_times[i])
-        overhead_times.append(overhead_time)
+    mean_ms = statistics.mean(timings)
+    median_ms = statistics.median(timings)
+    stdev_ms = statistics.stdev(timings)
 
-    timing_results.overhead_times = overhead_times
+    return TimingStatistics(timings, mean_ms, median_ms, stdev_ms)
+    
 
 # using iterations and not epochs because benchmarking computation, not model accuracy, is the main goal
 # if len(dataloader) == 5000 and we increase epochs by 3,
 # that means 15000 - 5000 == 10000 more benchmark iterations
 # we want to increase iterations by 1 and have the number of benchmark iterations increase by 1
-def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkTimingResults:
+def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkResults:
     total_training_times = []
     dataloader_times = []
     forward_times = []
@@ -70,6 +81,7 @@ def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkTimingRes
     zero_grad_times = []
     backward_times = []
     optimizer_times = []
+    overhead_times = []
 
     config.model.train()
 
@@ -128,15 +140,20 @@ def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkTimingRes
         if iteration % 100 == 0:
             print("Done with iteration", iteration)
 
-    timing_results = TrainingBenchmarkTimingResults(
-        total_training_times,
-        dataloader_times,
-        forward_times,
-        loss_times,
-        zero_grad_times,
-        backward_times,
-        optimizer_times)
-    
-    processing_overhead_times(timing_results)
+    for i in range(len(total_training_times)):
+        overhead_time = (total_training_times[i] -
+                         forward_times[i] -
+                         loss_times[i] -
+                         zero_grad_times[i] -
+                         backward_times[i] -
+                         optimizer_times[i])
+        overhead_times.append(overhead_time)
 
-    return timing_results
+    return TrainingBenchmarkResults(timings_processing(total_training_times),
+                                    timings_processing(dataloader_times),
+                                    timings_processing(forward_times),
+                                    timings_processing(loss_times),
+                                    timings_processing(zero_grad_times),
+                                    timings_processing(backward_times),
+                                    timings_processing(optimizer_times),
+                                    timings_processing(overhead_times))

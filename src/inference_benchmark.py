@@ -17,6 +17,8 @@ class InferenceBenchmarkConfig:
     def __post_init__(self):
         if self.iterations < 2:
             raise ValueError("Number of iterations must be greater than 1")
+        if self.warmup_iterations < 0:
+            raise ValueError("Iterations must be greater than 0")
 
 @dataclass
 class InferenceBenchmarkResult:
