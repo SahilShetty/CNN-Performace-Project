@@ -6,7 +6,7 @@ from torch import nn
 from time import perf_counter
 import statistics
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 @dataclass
 class TrainingBenchmarkConfig:
@@ -136,9 +136,8 @@ def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkResults:
         backward_times.append(backward_time_end - backward_time_start)
         optimizer_times.append(optimizer_time_end - optimizer_time_start)
 
-
-        if iteration % 100 == 0:
-            print("Done with iteration", iteration)
+        if iteration % 50 == 0:
+            print("Finished", iteration, "iterations")
 
     for i in range(len(total_training_times)):
         overhead_time = (total_training_times[i] -

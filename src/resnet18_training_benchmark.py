@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torchvision.models import resnet18
-from training_benchmark import training_loop, processing_times, TrainingBenchmarkConfig
+from training_benchmark import training_loop, TrainingBenchmarkConfig
 from dataclasses import asdict
 
 images = torch.rand(128, 3, 224, 224) # (images, channel, height, width) for PyTorch images
@@ -16,3 +16,6 @@ config = TrainingBenchmarkConfig(
     torch.optim.SGD(params=model.parameters(), lr=0.1))
 
 results = training_loop(config)
+print ("\n For 100 iterations: ")
+for key, value in asdict(results).items():
+    print(f"\t{key}: {value["mean_ms"]} ms")
