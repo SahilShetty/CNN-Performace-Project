@@ -153,7 +153,10 @@ def single_batch_training_benchmark(dataloader: torch.utils.data.DataLoader,
                          optimizer_times[i])
         overhead_times.append(overhead_time)
 
-    return TrainingBenchmarkResults(timings_processing(total_training_times),
+    batch_size = dataloader.batch_size
+
+    return TrainingBenchmarkResults(batch_size, config.warmup_iterations, config.iterations,
+                                    timings_processing(total_training_times),
                                     timings_processing(dataloader_times),
                                     timings_processing(forward_times),
                                     timings_processing(loss_times),
