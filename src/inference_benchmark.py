@@ -25,6 +25,7 @@ class InferenceBenchmarkResult:
     batch_size: int
     warmup_iterations: int
     iterations: int
+    
     latencies_ms: list[float]
     mean_latency_ms: float
     median_latency_ms: float
@@ -61,7 +62,6 @@ def single_batch_inference_benchmark(inputs: torch.Tensor, config: InferenceBenc
 
 
 def varying_batch_inference_benchmark(config: InferenceBenchmarkConfig) -> list[InferenceBenchmarkResult]:
-
     batch_sizes = [2 ** i for i in range(config.num_batch_sizes)]
     results = []
 
@@ -70,7 +70,7 @@ def varying_batch_inference_benchmark(config: InferenceBenchmarkConfig) -> list[
         result = single_batch_inference_benchmark(inputs, config)
         results.append(result)
 
-        print("Finished batch size", batch_size, ": " + f"{result.throughput_images_per_sec:.1f}", "images per second")
+        print(f"Finished batch size {batch_size}: {result.throughput_images_per_sec:.1f} images per second")
     print("\n")
 
     return results

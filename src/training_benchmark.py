@@ -1,4 +1,6 @@
 from collections.abc import Iterator
+from dataclasses import dataclass
+from copy import deepcopy
 
 import torch
 from torch import nn
@@ -6,22 +8,20 @@ from torch import nn
 from time import perf_counter
 import statistics
 
-from dataclasses import dataclass
-
 @dataclass
 class TrainingBenchmarkConfig:
     model: nn.Module
-    dataloader: torch.utils.data.DataLoader
     loss_fn: torch.nn.Module
     optimizer: torch.optim.Optimizer
     warmup_iterations: int = 10
-    iterations: int = 100
+    iterations: int = 50
+    num_batch_sizes: int = 5
 
     def __post_init__(self):
         if self.iterations < 2:
             raise ValueError("Number of iterations must be greater than 1")
         if self.warmup_iterations < 0:
-            raise ValueError("Iterations must be greater than 0")
+            raise ValueError("Iterations must be at least 0")
 
 
 @dataclass
@@ -33,6 +33,10 @@ class TimingStatistics:
 
 @dataclass
 class TrainingBenchmarkResults:
+    batch_size: int
+    warmup_iterations: int
+    iterations: int
+
     total_training_times: TimingStatistics
     dataloader_times: TimingStatistics
     forward_times: TimingStatistics
@@ -73,7 +77,8 @@ def timings_processing(timings: list[float]) -> TimingStatistics:
 # if len(dataloader) == 5000 and we increase epochs by 3,
 # that means 15000 - 5000 == 10000 more benchmark iterations
 # we want to increase iterations by 1 and have the number of benchmark iterations increase by 1
-def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkResults:
+def single_batch_training_benchmark(dataloader: torch.utils.data.DataLoader,
+                                    config: TrainingBenchmarkConfig) -> TrainingBenchmarkResults:
     total_training_times = []
     dataloader_times = []
     forward_times = []
@@ -85,9 +90,9 @@ def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkResults:
 
     config.model.train()
 
-    iter_warmup_dataloader = iter(config.dataloader)
+    iter_warmup_dataloader = iter(dataloader)
     for warmup_iteration in range(config.warmup_iterations):
-        (X, y, iter_warmup_dataloader) = next_batch(config.dataloader, iter_warmup_dataloader)
+        (X, y, iter_warmup_dataloader) = next_batch(dataloader, iter_warmup_dataloader)
 
         y_pred = config.model(X)
         loss = config.loss_fn(y_pred, y)
@@ -97,10 +102,10 @@ def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkResults:
 
     # train_loss = 0
 
-    iter_dataloader = iter(config.dataloader)
+    iter_dataloader = iter(dataloader)
     for iteration in range(config.iterations):
         dataloader_time_start = perf_counter()
-        (X, y, iter_dataloader) = next_batch(config.dataloader, iter_dataloader)
+        (X, y, iter_dataloader) = next_batch(dataloader, iter_dataloader)
         dataloader_time_end = perf_counter()
 
         total_training_time_start = perf_counter()
@@ -156,3 +161,24 @@ def training_loop(config: TrainingBenchmarkConfig) -> TrainingBenchmarkResults:
                                     timings_processing(backward_times),
                                     timings_processing(optimizer_times),
                                     timings_processing(overhead_times))
+
+def varying_batch_training_benchmark(dataset: torch.utils.data.TensorDataset,
+                                     config: TrainingBenchmarkConfig) -> list[TrainingBenchmarkResults]:
+    batch_sizes = [2 ** i for i in range(config.num_batch_sizes)]
+    results = []
+
+    # original_config required because optimizer and weights of model don't reset automatically after each iteration of batch_sizes
+    # in order to stay consistent, we must reset the optimizer and weights
+    # deepcopy required because original_config = config makes it so both variables refer to same memory address
+    original_config = deepcopy(config)
+
+    for batch_size in batch_sizes:
+        config = deepcopy(original_config)
+        dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=batch_size)
+        result = single_batch_training_benchmark(dataloader, config)
+        results.append(result)
+
+        print(f"Finished batch size {batch_size}: {result.total_training_times.mean_ms:.1f} ms total, {result.overhead_times.mean_ms} ms overhead")
+    print("\n")
+
+    return results
