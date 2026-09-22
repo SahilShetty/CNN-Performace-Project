@@ -33,6 +33,7 @@ class InferenceBenchmarkResult:
     throughput_images_per_sec: float
 
 def single_batch_inference_benchmark(inputs: torch.Tensor, config: InferenceBenchmarkConfig) -> InferenceBenchmarkResult:
+    batch_size = inputs.shape[0]
     config.model.eval()
 
     with torch.inference_mode():
@@ -47,14 +48,13 @@ def single_batch_inference_benchmark(inputs: torch.Tensor, config: InferenceBenc
             config.model(inputs)
             end = time.perf_counter()
 
-            latencies_ms.append((end - start) * 1000)
+            latencies_ms.append((end - start) / batch_size * 1000)
 
     mean_latency_ms = statistics.mean(latencies_ms)
     median_latency_ms = statistics.median(latencies_ms)
     stdev_latency_ms = statistics.stdev(latencies_ms)
 
-    batch_size = inputs.shape[0]
-    throughput_images_per_sec = batch_size / mean_latency_ms * 1000
+    throughput_images_per_sec = 1000 / mean_latency_ms
 
     return InferenceBenchmarkResult(batch_size, config.warmup_iterations, config.iterations,
                                     latencies_ms, mean_latency_ms, median_latency_ms,
