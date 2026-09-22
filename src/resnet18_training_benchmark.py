@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torchvision.models import resnet18
-from training_benchmark import varying_batch_training_benchmark, TrainingBenchmarkConfig
+from training_benchmark import varying_batch_training_benchmark, plot_total_overhead, TrainingBenchmarkConfig
 from dataclasses import asdict
 
 images = torch.rand(128, 3, 224, 224) # (images, channel, height, width) for PyTorch images
@@ -12,3 +12,4 @@ model = resnet18(weights=None)
 config = TrainingBenchmarkConfig(model, nn.CrossEntropyLoss(), torch.optim.SGD(params=model.parameters(), lr=0.1), num_batch_sizes=3)
 
 results = varying_batch_training_benchmark(dataset, config)
+plot_total_overhead(results)

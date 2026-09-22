@@ -5,6 +5,7 @@ from copy import deepcopy
 import torch
 from torch import nn
 
+import matplotlib.pyplot as plt
 from time import perf_counter
 import statistics
 
@@ -185,3 +186,47 @@ def varying_batch_training_benchmark(dataset: torch.utils.data.TensorDataset,
     print("\n")
 
     return results
+
+def plot_total_overhead(results: list[TrainingBenchmarkResults]):
+    difrnt_batch_sizes = []
+    difrnt_mean_total_times_ms = []
+    difrnt_stdev_total_times_ms = []
+    difrnt_mean_overhead_times_ms = []
+    difrnt_stdev_overhead_times_ms = []
+
+    for result in results:
+        difrnt_batch_sizes.append(result.batch_size)
+        difrnt_mean_total_times_ms.append(result.total_training_times.mean_ms)
+        difrnt_stdev_total_times_ms.append(result.total_training_times.stdev_ms)
+        difrnt_mean_overhead_times_ms.append(result.overhead_times.mean_ms)
+        difrnt_stdev_overhead_times_ms.append(result.overhead_times.stdev_ms)
+
+    plt.figure()
+    plt.errorbar(
+        difrnt_batch_sizes,
+        difrnt_mean_total_times_ms,
+        yerr=difrnt_stdev_total_times_ms,
+        color="blue",
+        ecolor="red",
+        markeredgecolor="black",
+        capsize=1.5,
+        marker="o"
+    )
+    plt.xlabel("Batch Size")
+    plt.ylabel("Total Training Time per Image (ms)")
+
+    plt.figure()
+    plt.errorbar(
+        difrnt_batch_sizes,
+        difrnt_mean_overhead_times_ms,
+        yerr=difrnt_stdev_overhead_times_ms,
+        color="blue",
+        ecolor="red",
+        markeredgecolor="black",
+        capsize=1.5,
+        marker="o"
+    )
+    plt.xlabel("Batch Size")
+    plt.ylabel("Overhead Time per Image (ms)")
+
+    plt.show()
