@@ -202,31 +202,19 @@ def plot_total_overhead(results: list[TrainingBenchmarkResults]):
         difrnt_stdev_overhead_times_ms.append(result.overhead_times.stdev_ms)
 
     plt.figure()
-    plt.errorbar(
-        difrnt_batch_sizes,
-        difrnt_mean_total_times_ms,
-        yerr=difrnt_stdev_total_times_ms,
-        color="blue",
-        ecolor="red",
-        markeredgecolor="black",
-        capsize=1.5,
-        marker="o"
-    )
+    plt.errorbar(difrnt_batch_sizes, difrnt_mean_total_times_ms,
+                 yerr=difrnt_stdev_total_times_ms,
+                 color="blue", ecolor="red", markeredgecolor="black",
+                 capsize=1.5, marker="o")
     plt.xlabel("Batch Size")
-    plt.ylabel("Total Training Time per Image (ms)")
+    plt.ylabel("Total Training Time per Batch Size")
 
     plt.figure()
-    plt.errorbar(
-        difrnt_batch_sizes,
-        difrnt_mean_overhead_times_ms,
-        yerr=difrnt_stdev_overhead_times_ms,
-        color="blue",
-        ecolor="red",
-        markeredgecolor="black",
-        capsize=1.5,
-        marker="o"
-    )
+    plt.errorbar(difrnt_batch_sizes, difrnt_mean_overhead_times_ms,
+                 yerr=difrnt_stdev_overhead_times_ms,
+                 color="blue", ecolor="red", markeredgecolor="black",
+                 capsize=1.5, marker="o")
     plt.xlabel("Batch Size")
-    plt.ylabel("Overhead Time per Image (ms)")
+    plt.ylabel("Overhead Time per Batch Size")
 
     plt.show()
